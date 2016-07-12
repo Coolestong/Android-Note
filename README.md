@@ -86,6 +86,23 @@ Copies a file or FileSet to or from a (remote) machine running an SSH daemon. Fi
 
 这个target貌似是把生成的apk复制到了服务器上。再追溯它之前的target```rebuild```和```create_remote_dir```
 
+
+```
+    <target name="create_remote_dir">
+        <sshexec host= "${deploy.server}" username="${deploy.user}" password="${deploy.password}"
+                 command="rm -rf ${deploy.todir}; mkdir -p ${deploy.todir}" trust="true"/>
+    </target>
+```
+
+>sshexec
+Runs a command on a remote machine running SSH daemon.
+运行在远程机器上运行SSH守护进程的命令。
+host
+The hostname or IP address of the remote host to which you wish to connect.
+command
+The command to run on the remote host.
+
+
 ```
     <target name="rebuild" depends="zipalign">
         <echo>del unneed apk...</echo>
@@ -96,4 +113,70 @@ Copies a file or FileSet to or from a (remote) machine running an SSH daemon. Fi
                 dest="${last-package}"/>
     </target>
 ```
+这个target只是将apk重命名了。再看看```depends="zipalign"```
+
+```
+    <target name="zipalign" depends="jarsigner">
+        <exec executable="${android-zipalign}" failonerror="true">
+            <arg value="-v"/>
+            <arg value="-f"/>
+            <arg value="4"/>
+            <arg value="${outdir}/${project.name}_${DSTAMP}_build_signed.apk"/>
+            <arg value="${outdir}/${project.name}_${project.version}_${DSTAMP}_build_signed_qa.apk"/>
+        </exec>
+    </target>
+```
+
+貌似有点熟悉了，这不是Android打包的优化过程吗！再看```jarsigner```是签名过程,再往上呢？
+
+![pic1](C:\Users\sks\Desktop\图片1.png)
+
+我们通过这张图来回顾一下Android的打包过程吧。
+
+target"zipalign"实际所做的工作就是
+```
+zipalign -v -f 4 ${outdir}/${project.name}_${DSTAMP}_build_signed.apk ${outdir}/${project.name}_${project.version}_${DSTAMP}_build_signed_qa.apk
+```
+
+>Usage: zipalign [-f] [-v] [-z] <align> infile.zip outfile.zip
+ zipalign -c [-v] <align> infile.zip
+  <align>: alignment in bytes, e.g. '4' provides 32-bit alignment
+  -c: check alignment only (does not modify file)
+  -f: overwrite existing outfile.zip
+  -v: verbose output
+  -z: recompress using Zopfli
+这是zipalign用法，参数可一一对照
+
+target"jarsigner"
+```
+    <target name="jarsigner" depends="add-seconde-dex">
+        <exec executable="${jarsigner}" failonerror="true">
+```
+这是签名，参数就不贴了。
+
+```
+    <target name="add-seconde-dex" depends="release">
+        <echo>Adding seconde dex ...</echo>
+        <exec executable="${android-aapt}" dir="${outdir}" failonerror="true">
+            <arg line='add -v "${outdir}/${project.name}-unsigned.apk" classes2.dex'/>
+        </exec> 
+    </target>
+```
+还原成命令行是
+```
+aapt add -v "${outdir}/${project.name}-unsigned.apk" classes2.dex
+```
+
+> aapt a[dd] [-v] file.{zip,jar,apk} file1 [file2 ...]
+   Add specified files to Zip-compatible archive.
+   
+对照用法，可解读成将未签名的apk添加到了class2.dex里。
+那这个class2.dex是什么，又是怎么来的？
+
+
+
+
+
+
+
 
