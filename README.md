@@ -82,7 +82,7 @@ cURL是一个利用URL语法在命令行下工作的文件传输工具，这个t
 
 >scp节点
 Copies a file or FileSet to or from a (remote) machine running an SSH daemon. FileSet only works for copying files from the local machine to a remote machine.
-复制一个文件或文件集，或从运行SSH守护进程（远程）机器。文件集仅适用于复制从本地机文件到远程计算机。（来自Google翻译）
+复制一个文件或文件集，或从运行SSH守护进程（远程）机器。文件集仅适用于复制从本地机文件到远程计算机。
 
 这个target貌似是把生成的apk复制到了服务器上。再追溯它之前的target```rebuild```和```create_remote_dir```
 
@@ -172,6 +172,56 @@ aapt add -v "${outdir}/${project.name}-unsigned.apk" classes2.dex
    
 对照用法，可解读成将未签名的apk添加到了class2.dex里。
 那这个class2.dex是什么，又是怎么来的？
+我们再往上看
+```
+<target name="release" depends="package-res-and-assets">
+        <echo>Packaging for release...</echo>
+        <exec executable="${android-builder}" failonerror="true">
+            <arg value="${outdir}/${project.name}-unsigned.apk"/>
+            <arg value="-u"/>
+            <arg value="-z"/>
+            <arg value="${resources-package}"/>
+            <arg value="-f"/>
+            <arg value="${intermediate-dex-location}"/>
+            <arg value="-rf"/>
+            <arg value="${project.home}/src"/>
+            <arg value="-rj"/>
+            <arg value="${external-libs}"/>
+            <arg value="-nf"/>
+            <arg value="${external-libs}"/>
+            <arg value="-nf"/>
+            <arg value="${external-im-libs}"/>
+        </exec>
+        <echo>It will need to be signed with jarsigner before being published.</echo>
+    </target>
+```
+翻译成命令行如下：
+```
+apkbuilder ${outdir}/${project.name}-unsigned.apk -u -z ${resources-package} -f ${intermediate-dex-location} -rf ${project.home}/src 
+-rj ${external-libs} -nf ${external-libs} -nf ${external-im-libs}
+```
+
+>参数含义看[这里](http://blog.csdn.net/electricity/article/details/6543299)
+
+ 这里会遇到一个坑，apkbuilder按道理来说应该在${ANDROID_SDK_HOME}/tools这个目录下，但如果你的sdk升级到22以上后，你会发现，这个批处理文件不见了。[这里](http://www.devdiv.com/forum.php?mod=viewthread&tid=204076)有解决办法。下面是
+ ```
+ set jarfile=sdklib.jar
+set frameworkdir=
+
+if exist %frameworkdir%%jarfile% goto JarFileOk
+    set frameworkdir=lib\
+
+if exist %frameworkdir%%jarfile% goto JarFileOk
+    set frameworkdir=..\framework\
+
+:JarFileOk
+
+set jarpath=%frameworkdir%%jarfile%
+
+call %java_exe% -classpath %jarpath% com.android.sdklib.build.ApkBuilderMain %*
+```
+ apkbuilder是一个脚本工具，实际调用的是android-sdk\tools\lib\sdklib.jar文件中的com.android.sdklib.build.ApkBuilderMain类。它的代码实现位于android系统源码的sdk\sdkmanager\libs\sdklib\src\com\android\sdklib\build\ApkBuilderMain.java文件，代码构建了一个ApkBuilder类，然后 以包含resources.arsc的文件为基础生成apk文件，这个文件一般为ap_结尾，接着调用addSourceFolder()函数添加工程资源，addSourceFolder()会调用processFileForResource（）函数往apk文件中添加资源，处理的内容包括res目录与asserts目录中的文件，添加完资源后调用addResourceFromJar（）函数往apk文件中写入依赖库，接着调用addNativeLibraries()函数添加工程libs目录下的Native库（通过android NDK编译生成的so或bin文件），最后调用sealApk（）关闭apk文件。
+
 
 
 
