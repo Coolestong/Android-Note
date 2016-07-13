@@ -203,7 +203,7 @@ apkbuilder ${outdir}/${project.name}-unsigned.apk -u -z ${resources-package} -f 
 
 >参数含义看[这里](http://blog.csdn.net/electricity/article/details/6543299)
 
- 这里会遇到一个坑，apkbuilder按道理来说应该在${ANDROID_SDK_HOME}/tools这个目录下，但如果你的sdk升级到22以上后，你会发现，这个批处理文件不见了。[这里](http://www.devdiv.com/forum.php?mod=viewthread&tid=204076)有解决办法。下面是
+ 这里会遇到一个坑，apkbuilder按道理来说应该在${ANDROID_SDK_HOME}/tools这个目录下，但如果你的sdk升级到22以上后，你会发现，这个批处理文件不见了。[这里](http://www.devdiv.com/forum.php?mod=viewthread&tid=204076)有解决办法。下面是apkbuilder的源码
  ```
  set jarfile=sdklib.jar
 set frameworkdir=
@@ -220,10 +220,121 @@ set jarpath=%frameworkdir%%jarfile%
 
 call %java_exe% -classpath %jarpath% com.android.sdklib.build.ApkBuilderMain %*
 ```
- apkbuilder是一个脚本工具，实际调用的是android-sdk\tools\lib\sdklib.jar文件中的com.android.sdklib.build.ApkBuilderMain类。它的代码实现位于android系统源码的sdk\sdkmanager\libs\sdklib\src\com\android\sdklib\build\ApkBuilderMain.java文件，代码构建了一个ApkBuilder类，然后 以包含resources.arsc的文件为基础生成apk文件，这个文件一般为ap_结尾，接着调用addSourceFolder()函数添加工程资源，addSourceFolder()会调用processFileForResource（）函数往apk文件中添加资源，处理的内容包括res目录与asserts目录中的文件，添加完资源后调用addResourceFromJar（）函数往apk文件中写入依赖库，接着调用addNativeLibraries()函数添加工程libs目录下的Native库（通过android NDK编译生成的so或bin文件），最后调用sealApk（）关闭apk文件。
+ 可以看到apkbuilder实际调用的是android-sdk\tools\lib\sdklib.jar文件中的com.android.sdklib.build.ApkBuilderMain类。它的代码实现位于android系统源码的sdk\sdkmanager\libs\sdklib\src\com\android\sdklib\build\ApkBuilderMain.java文件，代码构建了一个ApkBuilder类，然后 以包含resources.arsc的文件为基础生成apk文件，这个文件一般为ap_结尾，接着调用addSourceFolder()函数添加工程资源，addSourceFolder()会调用processFileForResource（）函数往apk文件中添加资源，处理的内容包括res目录与asserts目录中的文件，添加完资源后调用addResourceFromJar（）函数往apk文件中写入依赖库，接着调用addNativeLibraries()函数添加工程libs目录下的Native库（通过android NDK编译生成的so或bin文件），最后调用sealApk（）关闭apk文件。
+
+```
+    <target name="package-res-and-assets" depends="dex, dex2">
+        <echo>Packaging resources and assets...</echo>
+        <exec executable="${android-aapt}" failonerror="true">
+            <arg value="package"/>
+            <arg value="-f"/>
+            <arg value="-M"/>
+            <arg value="${project.home}/AndroidManifest.xml"/>
+            <arg value="-S"/>
+            <arg value="${resource-dir}"/>
+            <arg value="-S"/>
+            <arg value="${im-resource-dir}"/>
+            <arg value="-A"/>
+            <arg value="${asset-dir}"/>
+            <arg value="-I"/>
+            <arg value="${android-jar}"/>
+            <arg value="-F"/>
+            <arg value="${resources-package}"/>
+            <arg value="--auto-add-overlay" />
+        </exec>
+    </target>
+```
+翻译成命令行如下：
+```
+aapt package -f -M ${project.home}/AndroidManifest.xml -S ${resource-dir} -S ${im-resource-dir} -A ${asset-dir} -I ${android-jar} -F
+${resources-package} --auto-add-overlay
+```
+
+> aapt p[ackage] [-d][-f][-m][-u][-v][-x][-z][-M AndroidManifest.xml] \
+        [-0 extension [-0 extension ...]] [-g tolerance] [-j jarfile] \
+        [--debug-mode] [--min-sdk-version VAL] [--target-sdk-version VAL] \
+        [--app-version VAL] [--app-version-name TEXT] [--custom-package VAL] \
+        [--rename-manifest-package PACKAGE] \
+        [--rename-instrumentation-target-package PACKAGE] \
+        [--utf16] [--auto-add-overlay] \
+        [--max-res-version VAL] \
+        [-I base-package [-I base-package ...]] \
+        [-A asset-source-dir]  [-G class-list-file] [-P public-definitions-file] \
+        [-S resource-sources [-S resource-sources ...]] \
+        [-F apk-file] [-J R-file-dir] \
+        [--product product1,product2,...] \
+        [-c CONFIGS] [--preferred-configurations CONFIGS] \
+        [--split CONFIGS [--split CONFIGS]] \
+        [--feature-of package [--feature-after package]] \
+        [raw-files-dir [raw-files-dir] ...] \
+        [--output-text-symbols DIR]
+        --auto-add-overlay
+       Automatically add resources that are only in overlays.
 
 
+   Package the android resources.  It will read assets and resources that are
+   supplied with the -M -A -S or raw-files-dir arguments.  The -J -P -F and -R
+   options control which files are output.
 
+```
+    <target name="dex" depends="compile">
+        <echo>Converting compiled files and external libraries into ${intermediate-dex-location}...</echo>
+        <apply executable="${android-dx}" failonerror="true" parallel="true">
+            <arg value="-JXmx2048M"/>
+            <arg value="--dex"/>
+            <arg value="--output=${intermediate-dex-location}"/>
+            <arg path="${project.outdir}"/>
+            <fileset dir="${external-libs}" includes="*.jar">
+                <exclude name="baidu_appx_android_2.0.0.jar"/>
+                <exclude name="AMap_2DMap_V2.2.1.jar"/>
+                <exclude name="httpclient-4.1.2.jar"/>
+                <exclude name="httpcore-4.1.2.jar"/>
+                <exclude name="jackson-databind-2.1.1.jar"/>
+                <exclude name="AMap_Services_V2.2.1.jar"/>
+                <exclude name="cobra-no-commons.jar"/>
+                <exclude name="Baidu_MobAds_SDK.jar"/>
+                <exclude name="baidu_appx_android_2.jar"/>
+                <exclude name="open_sdk_2.0.1.jar"/>
+                <exclude name="Android_Location_V1.1.2.jar"/>
+                <exclude name="jackson-core-2.1.1.jar"/>
+                <exclude name="umeng_sdk.jar"/>
+                <exclude name="android-support-v4.jar"/>
+            </fileset>
+            <fileset dir="${external-im-libs}" includes="*.jar"/>
+        </apply>
+    </target>
+```
+```
+<target name="dex2" depends="compile">
+        <echo>Converting compiled files and external libraries into ${intermediate-dex2-location}...</echo>
+        <apply executable="${android-dx}" failonerror="true" parallel="true">
+            <arg value="-JXmx2048M"/>
+            <arg value="--dex"/>
+            <arg value="--output=${intermediate-dex2-location}"/>
+            <fileset dir="${external-libs}">
+                <include name="baidu_appx_android_2.0.0.jar"/>
+                <include name="AMap_2DMap_V2.2.1.jar"/>
+                <include name="httpclient-4.1.2.jar"/>
+                <include name="httpcore-4.1.2.jar"/>
+                <include name="jackson-databind-2.1.1.jar"/>
+                <include name="AMap_Services_V2.2.1.jar"/>
+                <include name="cobra-no-commons.jar"/>
+                <include name="Baidu_MobAds_SDK.jar"/>
+                <include name="baidu_appx_android_2.jar"/>
+                <include name="open_sdk_2.0.1.jar"/>
+                <include name="Android_Location_V1.1.2.jar"/>
+                <include name="jackson-core-2.1.1.jar"/>
+                <include name="umeng_sdk.jar"/>
+                <include name="android-support-v4.jar"/>
+            </fileset>
+        </apply>
+    </target>
+```
+
+>apply节点：Executes a system command. When the os attribute is specified, then the command is only executed when Apache Ant is run on one of the specified operating systems.
+The files and/or directories of a number of Resource Collections – including but not restricted to FileSets, DirSets (since Ant 1.6) or FileLists (since Ant 1.6) – are passed as arguments to the system command.
+执行系统命令。当指定OS属性，那么当Apache Ant是在指定的操作系统之一运行只执行的命令。
+一些资源集合的文件和/或目录 - 包括但不限于文件集，DirSets的文件列表或 - 作为参数传递给系统命令传递。
 
 
 
