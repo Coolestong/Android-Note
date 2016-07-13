@@ -249,8 +249,8 @@ call %java_exe% -classpath %jarpath% com.android.sdklib.build.ApkBuilderMain %*
 aapt package -f -M ${project.home}/AndroidManifest.xml -S ${resource-dir} -S ${im-resource-dir} -A ${asset-dir} -I ${android-jar} -F
 ${resources-package} --auto-add-overlay
 ```
-
-> aapt p[ackage] [-d][-f][-m][-u][-v][-x][-z][-M AndroidManifest.xml] \
+```
+ aapt p[ackage] [-d][-f][-m][-u][-v][-x][-z][-M AndroidManifest.xml] \
         [-0 extension [-0 extension ...]] [-g tolerance] [-j jarfile] \
         [--debug-mode] [--min-sdk-version VAL] [--target-sdk-version VAL] \
         [--app-version VAL] [--app-version-name TEXT] [--custom-package VAL] \
@@ -270,6 +270,7 @@ ${resources-package} --auto-add-overlay
         [--output-text-symbols DIR]
         --auto-add-overlay
        Automatically add resources that are only in overlays.
+```
 
 
    Package the android resources.  It will read assets and resources that are
